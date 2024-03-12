@@ -10,35 +10,29 @@ local function on_created_entity(event)
 
     entity.active = false
 
-    local combinator = entity.surface.find_entity('capacity-time-estimator-internal', entity.position)
-    if combinator == nil then
-        combinator = entity.surface.create_entity {
-            name = 'capacity-time-estimator-internal',
-            force = entity.force,
-            position = entity.position,
-        }
+    local internal_combinator = entity.surface.find_entity('capacity-time-estimator-internal', entity.position)
+    if internal_combinator == nil then
+        internal_combinator =
+            entity.surface.create_entity { name = 'capacity-time-estimator-internal', force = entity.force, position = entity.position }
 
-        combinator.destructible = false
+        internal_combinator.destructible = false
 
-        combinator.connect_neighbour({
+        internal_combinator.connect_neighbour({
             target_entity = entity,
             wire = defines.wire_type.red,
             target_circuit_id = defines.circuit_connector_id.combinator_output,
         })
-        combinator.connect_neighbour({
+        internal_combinator.connect_neighbour({
             target_entity = entity,
             wire = defines.wire_type.green,
             target_circuit_id = defines.circuit_connector_id.combinator_output,
         })
 
-        global.children[script.register_on_entity_destroyed(entity)] = combinator
+        global.children[script.register_on_entity_destroyed(entity)] = internal_combinator
     end
 
-    global.structs[entity.unit_number] = {
-        unit_number = entity.unit_number,
-        entity = entity,
-        internal = combinator,
-    }
+    global.structs[entity.unit_number]
+    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator }
 end
 
 for _, event in ipairs({
@@ -48,9 +42,7 @@ for _, event in ipairs({
     defines.events.script_raised_revive,
     defines.events.on_entity_cloned,
 }) do
-    script.on_event(event, on_created_entity, {
-        { filter = 'name', name = 'capacity-time-estimator' },
-    })
+    script.on_event(event, on_created_entity, { { filter = 'name', name = 'capacity-time-estimator' }, })
 end
 
 local function on_configuration_changed()
@@ -66,30 +58,24 @@ local function tick_combinator(struct)
 
     -- just use entity.get_merged_signal(s) if you don't care about seperate input wires.
 
-    local red_network = struct.entity.get_circuit_network(defines.wire_type.red,
-        defines.circuit_connector_id.combinator_input)
-    local green_network = struct.entity.get_circuit_network(defines.wire_type.green,
-        defines.circuit_connector_id.combinator_input)
+    local red_network = struct.entity.get_circuit_network
+        (defines.wire_type.red, defines.circuit_connector_id.combinator_input)
+    local green_network = struct.entity.get_circuit_network
+        (defines.wire_type.green, defines.circuit_connector_id.combinator_input)
 
     if red_network and red_network.signals then
         for _, signal in ipairs(red_network.signals) do
-            table.insert(parameters, {
-                signal = signal.signal, count = signal.count * 10, index = #parameters + 1,
-            })
+            table.insert(parameters, { signal = signal.signal, count = signal.count * 10, index = #parameters + 1 })
         end
     end
 
     if green_network and green_network.signals then
         for _, signal in ipairs(green_network.signals) do
-            table.insert(parameters, {
-                signal = signal.signal, count = signal.count / 10, index = #parameters + 1,
-            })
+            table.insert(parameters, { signal = signal.signal, count = signal.count / 10, index = #parameters + 1 })
         end
     end
 
-    table.insert(parameters, {
-        signal = { type = 'item', name = 'raw-fish' }, count = 1, index = #parameters + 1,
-    })
+    table.insert(parameters, { signal = { type = 'item', name = 'raw-fish' }, count = 1, index = #parameters + 1 })
 
     struct.internal.get_control_behavior().parameters = parameters
 end
