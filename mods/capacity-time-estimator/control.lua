@@ -1,6 +1,6 @@
 script.on_event(defines.events.on_gui_opened, function(event)
     local entity = event.entity
-    if entity and entity.name == 'lua-combinator' then
+    if entity and entity.name == 'capacity-time-estimator' then
         -- close this gui and open a lua one, or attach to player.gui.relative
     end
 end)
@@ -10,10 +10,10 @@ local function on_created_entity(event)
 
     entity.active = false
 
-    local combinator = entity.surface.find_entity('lua-combinator-internal', entity.position)
+    local combinator = entity.surface.find_entity('capacity-time-estimator-internal', entity.position)
     if combinator == nil then
         combinator = entity.surface.create_entity {
-            name = 'lua-combinator-internal',
+            name = 'capacity-time-estimator-internal',
             force = entity.force,
             position = entity.position,
         }
@@ -49,7 +49,7 @@ for _, event in ipairs({
     defines.events.on_entity_cloned,
 }) do
     script.on_event(event, on_created_entity, {
-        { filter = 'name', name = 'lua-combinator' },
+        { filter = 'name', name = 'capacity-time-estimator' },
     })
 end
 
