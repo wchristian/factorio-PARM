@@ -32,7 +32,7 @@ local function on_created_entity(event)
     end
 
     global.structs[entity.unit_number]
-    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator }
+    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, value = 0, rate = 0 }
 end
 
 for _, event in ipairs({
@@ -53,37 +53,37 @@ end
 script.on_init(on_configuration_changed)
 script.on_configuration_changed(on_configuration_changed)
 
-local function tick_combinator(struct)
-    local parameters = {}
-
-    -- just use entity.get_merged_signal(s) if you don't care about seperate input wires.
-
-    local red_network = struct.entity.get_circuit_network
-        (defines.wire_type.red, defines.circuit_connector_id.combinator_input)
-    local green_network = struct.entity.get_circuit_network
-        (defines.wire_type.green, defines.circuit_connector_id.combinator_input)
-
-    if red_network and red_network.signals then
-        for _, signal in ipairs(red_network.signals) do
-            table.insert(parameters, { signal = signal.signal, count = signal.count * 10, index = #parameters + 1 })
-        end
-    end
-
-    if green_network and green_network.signals then
-        for _, signal in ipairs(green_network.signals) do
-            table.insert(parameters, { signal = signal.signal, count = signal.count / 10, index = #parameters + 1 })
-        end
-    end
-
-    table.insert(parameters, { signal = { type = 'item', name = 'raw-fish' }, count = 1, index = #parameters + 1 })
-
-    struct.internal.get_control_behavior().parameters = parameters
+local function int(num)
+    return math.min(math.max(num, -2147483647), 2147483647)
 end
 
-script.on_nth_tick(60, function(event)
+local function tick_combinator(struct, ticks_per)
+    local entity = struct.entity
+    local signal_port = defines.circuit_connector_id.combinator_input
+    local input = entity.get_merged_signal({ type = "virtual", name = "signal-I" }, signal_port)
+    local target = entity.get_merged_signal({ type = "virtual", name = "signal-T" }, signal_port) or 0
+    local smoothing = math.max(1, entity.get_merged_signal({ type = "virtual", name = "signal-S" }, signal_port) or 10)
+
+    local diff = input - struct.value
+    struct.value = input
+    struct.rate = struct.rate + ((diff - struct.rate) / smoothing)
+    local estimate = ((target - struct.value) / struct.rate) * (ticks_per / 60)
+
+    local out = {}
+
+    table.insert(out, { signal = { type = "virtual", name = "signal-R" }, count = int(struct.rate), index = #out + 1 })
+    table.insert(out, { signal = { type = "virtual", name = "signal-D" }, count = int(diff), index = #out + 1 })
+    table.insert(out, { signal = { type = "virtual", name = "signal-E" }, count = int(estimate), index = #out + 1 })
+    table.insert(out, { signal = { type = "virtual", name = "signal-V" }, count = int(struct.value), index = #out + 1 })
+
+    struct.internal.get_control_behavior().parameters = out
+end
+
+local ticks_per = 1200
+script.on_nth_tick(ticks_per, function(event)
     for unit_number, struct in pairs(global.structs) do
         if struct.entity.valid then
-            tick_combinator(struct)
+            tick_combinator(struct, ticks_per)
         else
             global.structs[unit_number] = nil
         end
