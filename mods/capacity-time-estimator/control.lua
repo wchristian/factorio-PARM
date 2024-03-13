@@ -32,7 +32,7 @@ local function on_created_entity(event)
     end
 
     global.structs[entity.unit_number]
-    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, value = 0, rate = 0 }
+    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, values = {}, rates = {}, next_tick = 0 }
 end
 
 for _, event in ipairs({
@@ -57,33 +57,53 @@ local function int(num)
     return math.min(math.max(num, -2147483647), 2147483647)
 end
 
-local function tick_combinator(struct, ticks_per)
+local function try_tick_combinator(struct, tick)
+    if tick < struct.next_tick then return end
+
     local entity = struct.entity
     local signal_port = defines.circuit_connector_id.combinator_input
-    local input = entity.get_merged_signal({ type = "virtual", name = "signal-I" }, signal_port)
-    local target = entity.get_merged_signal({ type = "virtual", name = "signal-T" }, signal_port) or 0
-    local smoothing = math.max(1, entity.get_merged_signal({ type = "virtual", name = "signal-S" }, signal_port) or 10)
 
-    local diff = input - struct.value
-    struct.value = input
-    struct.rate = struct.rate + ((diff - struct.rate) / smoothing)
-    local estimate = ((target - struct.value) / struct.rate) * (ticks_per / 60)
+    local red_network = entity.get_circuit_network(defines.wire_type.red, signal_port)
+    local green_network = entity.get_circuit_network(defines.wire_type.green, signal_port)
+
+    local target = 0
+    local smoothing = 2
+    local update_rate = 20
+    local time_divisor = 60
+
+    if green_network and green_network.signals then
+        for _, signal in ipairs(green_network.signals) do
+            if signal.signal.name == "signal-T" then target = math.max(signal.count, 0) end
+            if signal.signal.name == "signal-S" then smoothing = math.max(signal.count, 1) end
+            if signal.signal.name == "signal-U" then update_rate = math.max(signal.count, 1) end
+            if signal.signal.name == "signal-D" then time_divisor = math.max(signal.count, 1) end
+        end
+    end
 
     local out = {}
 
-    table.insert(out, { signal = { type = "virtual", name = "signal-R" }, count = int(struct.rate), index = #out + 1 })
-    table.insert(out, { signal = { type = "virtual", name = "signal-D" }, count = int(diff), index = #out + 1 })
-    table.insert(out, { signal = { type = "virtual", name = "signal-E" }, count = int(estimate), index = #out + 1 })
-    table.insert(out, { signal = { type = "virtual", name = "signal-V" }, count = int(struct.value), index = #out + 1 })
+    if red_network and red_network.signals then
+        for _, signal in ipairs(red_network.signals) do
+            local name          = signal.signal.type .. ":" .. signal.signal.name
+            local diff          = signal.count - (struct.values[name] or signal.count)
+            struct.values[name] = signal.count
+            local old_rate      = struct.rates[name] or diff
+            struct.rates[name]  = old_rate + ((diff - old_rate) / smoothing)
+            local estimate      = (((target - struct.values[name]) / struct.rates[name]) * update_rate) / time_divisor
+            if estimate < 0 then estimate = 2147483647 end
+            table.insert(out, { signal = signal.signal, count = int(estimate), index = #out + 1 })
+        end
+    end
 
     struct.internal.get_control_behavior().parameters = out
+
+    struct.next_tick = tick + math.max(1, update_rate * 60)
 end
 
-local ticks_per = 1200
-script.on_nth_tick(ticks_per, function(event)
+script.on_nth_tick(60, function(event)
     for unit_number, struct in pairs(global.structs) do
         if struct.entity.valid then
-            tick_combinator(struct, ticks_per)
+            try_tick_combinator(struct, event.tick)
         else
             global.structs[unit_number] = nil
         end
