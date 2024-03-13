@@ -1,6 +1,6 @@
 script.on_event(defines.events.on_gui_opened, function(event)
     local entity = event.entity
-    if entity and entity.name == 'capacity-time-estimator' then
+    if entity and entity.name == 'parm-combinator' then
         -- close this gui and open a lua one, or attach to player.gui.relative
     end
 end)
@@ -10,10 +10,10 @@ local function on_created_entity(event)
 
     entity.active = false
 
-    local internal_combinator = entity.surface.find_entity('capacity-time-estimator-internal', entity.position)
+    local internal_combinator = entity.surface.find_entity('parm-combinator-internal', entity.position)
     if internal_combinator == nil then
         internal_combinator =
-            entity.surface.create_entity { name = 'capacity-time-estimator-internal', force = entity.force, position = entity.position }
+            entity.surface.create_entity { name = 'parm-combinator-internal', force = entity.force, position = entity.position }
 
         internal_combinator.destructible = false
 
@@ -42,7 +42,7 @@ for _, event in ipairs({
     defines.events.script_raised_revive,
     defines.events.on_entity_cloned,
 }) do
-    script.on_event(event, on_created_entity, { { filter = 'name', name = 'capacity-time-estimator' }, })
+    script.on_event(event, on_created_entity, { { filter = 'name', name = 'parm-combinator' }, })
 end
 
 local function on_configuration_changed()

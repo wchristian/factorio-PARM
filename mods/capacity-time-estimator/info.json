@@ -1,7 +1,7 @@
 {
-    "name": "capacity-time-estimator",
-    "title": "Capacity Time Estimator Combinator",
-    "description": "A combinator that measures changes in capacity and estimates time until a given target is met.",
+    "name": "PARM",
+    "title": "PARM - Predictive Artisanal Resource Monitor",
+    "description": "A combinator that measures changes in resources and estimates time until a given target is met.",
     "version": "1.0.0",
     "author": "Mithaldu",
     "factorio_version": "1.1",
