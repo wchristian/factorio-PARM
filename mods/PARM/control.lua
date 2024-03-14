@@ -32,7 +32,7 @@ local function on_created_entity(event)
     end
 
     global.structs[entity.unit_number]
-    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, values = {}, speeds = {}, next_tick = 0 }
+    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, resources = {}, next_tick = 0 }
 end
 
 for _, event in ipairs({
@@ -80,28 +80,40 @@ local function try_tick_combinator(struct, tick)
         end
     end
 
-    local out = {}
+    local red_signals_by_name = {}
 
     if red_network and red_network.signals then
         for _, signal in ipairs(red_network.signals) do
-            local name          = signal.signal.type .. ":" .. signal.signal.name
-            local speed         = (signal.count - (struct.values[name] or signal.count)) / update_rate
-            struct.values[name] = signal.count
-            local old_speed     = struct.speeds[name] or speed
-            struct.speeds[name] = old_speed + ((speed - old_speed) / smoothing)
-            local estimate
-            if mode == 1 then
-                local remaining = target - struct.values[name]
-                estimate        = (remaining / struct.speeds[name]) / time_divisor
-                estimate        =
-                    estimate ~= estimate and (remaining == 0 and 0 or limit)
-                    or estimate < 0 and limit
-                    or math.min(estimate, limit)
-            elseif mode == 2 then
-                estimate = tonumber(string.format("%.0f", struct.speeds[name] / time_divisor))
+            local name = signal.signal.type .. ":" .. signal.signal.name
+            if signal.count < 0 then
+                struct.resources[name] = nil
+            else
+                struct.resources[name]    = struct.resources[name] or { signal = signal.signal }
+                red_signals_by_name[name] = signal.count
             end
-            table.insert(out, { signal = signal.signal, count = estimate, index = #out + 1 })
         end
+    end
+
+    local out = {}
+
+    for name, resource in pairs(struct.resources) do
+        local signal_value = red_signals_by_name[name] or 0
+        local speed        = (signal_value - (resource.value or signal_value)) / update_rate
+        resource.value     = signal_value
+        local old_speed    = resource.speed or speed
+        resource.speed     = old_speed + ((speed - old_speed) / smoothing)
+        local estimate
+        if mode == 1 then
+            local remaining = target - resource.value
+            estimate        = (remaining / resource.speed) / time_divisor
+            estimate        =
+                estimate ~= estimate and (remaining == 0 and 0 or limit)
+                or estimate < 0 and limit
+                or math.min(estimate, limit)
+        elseif mode == 2 then
+            estimate = tonumber(string.format("%.0f", resource.speed / time_divisor))
+        end
+        table.insert(out, { signal = resource.signal, count = estimate, index = #out + 1 })
     end
 
     struct.internal.get_control_behavior().parameters = out
