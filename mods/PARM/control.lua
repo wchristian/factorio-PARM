@@ -32,7 +32,7 @@ local function on_created_entity(event)
     end
 
     global.structs[entity.unit_number]
-    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, values = {}, rates = {}, next_tick = 0 }
+    = { unit_number = entity.unit_number, entity = entity, internal = internal_combinator, values = {}, speeds = {}, next_tick = 0 }
 end
 
 for _, event in ipairs({
@@ -53,10 +53,6 @@ end
 script.on_init(on_configuration_changed)
 script.on_configuration_changed(on_configuration_changed)
 
-local function int(num)
-    return math.min(math.max(num, -2147483647), 2147483647)
-end
-
 local function try_tick_combinator(struct, tick)
     if tick < struct.next_tick then return end
 
@@ -70,6 +66,8 @@ local function try_tick_combinator(struct, tick)
     local smoothing = 2
     local update_rate = 20
     local time_divisor = 60
+    local limit = 2147483647
+    local mode = 1
 
     if green_network and green_network.signals then
         for _, signal in ipairs(green_network.signals) do
@@ -77,6 +75,8 @@ local function try_tick_combinator(struct, tick)
             if signal.signal.name == "signal-S" then smoothing = math.max(signal.count, 1) end
             if signal.signal.name == "signal-U" then update_rate = math.max(signal.count, 1) end
             if signal.signal.name == "signal-D" then time_divisor = math.max(signal.count, 1) end
+            if signal.signal.name == "signal-L" then limit = math.max(signal.count, 1) end
+            if signal.signal.name == "signal-M" then mode = math.min(math.max(signal.count, 1), 2) end
         end
     end
 
@@ -85,13 +85,22 @@ local function try_tick_combinator(struct, tick)
     if red_network and red_network.signals then
         for _, signal in ipairs(red_network.signals) do
             local name          = signal.signal.type .. ":" .. signal.signal.name
-            local diff          = signal.count - (struct.values[name] or signal.count)
+            local speed         = (signal.count - (struct.values[name] or signal.count)) / update_rate
             struct.values[name] = signal.count
-            local old_rate      = struct.rates[name] or diff
-            struct.rates[name]  = old_rate + ((diff - old_rate) / smoothing)
-            local estimate      = (((target - struct.values[name]) / struct.rates[name]) * update_rate) / time_divisor
-            if estimate < 0 then estimate = 2147483647 end
-            table.insert(out, { signal = signal.signal, count = int(estimate), index = #out + 1 })
+            local old_speed     = struct.speeds[name] or speed
+            struct.speeds[name] = old_speed + ((speed - old_speed) / smoothing)
+            local estimate
+            if mode == 1 then
+                local remaining = target - struct.values[name]
+                estimate        = (remaining / struct.speeds[name]) / time_divisor
+                estimate        =
+                    estimate ~= estimate and (remaining == 0 and 0 or limit)
+                    or estimate < 0 and limit
+                    or math.min(estimate, limit)
+            elseif mode == 2 then
+                estimate = tonumber(string.format("%.0f", struct.speeds[name] / time_divisor))
+            end
+            table.insert(out, { signal = signal.signal, count = estimate, index = #out + 1 })
         end
     end
 
