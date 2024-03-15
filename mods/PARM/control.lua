@@ -111,7 +111,7 @@ local function try_tick_combinator(struct, tick)
                 or estimate < 0 and limit
                 or math.min(estimate, limit)
         elseif mode == 2 then
-            estimate = tonumber(string.format("%.0f", resource.speed / time_divisor))
+            estimate = tonumber(string.format("%.0f", resource.speed * time_divisor))
         end
         table.insert(out, { signal = resource.signal, count = estimate, index = #out + 1 })
     end
